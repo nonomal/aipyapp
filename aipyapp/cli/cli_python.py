@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import os
 import code
 import builtins
 from pathlib import Path
-import importlib.resources as resources
 
 from rich.console import Console
 from prompt_toolkit import PromptSession
@@ -15,9 +13,8 @@ from prompt_toolkit.lexers import PygmentsLexer
 from prompt_toolkit.history import FileHistory
 from pygments.lexers.python import PythonLexer
 
-from . import __version__, T, set_lang
-from .aipy import TaskManager
-from .aipy.config import ConfigManager
+from ..aipy import TaskManager, ConfigManager, CONFIG_DIR
+from .. import T, set_lang, __version__
 
 class PythonCompleter(WordCompleter):
     def __init__(self, ai):
@@ -29,6 +26,7 @@ class PythonCompleter(WordCompleter):
 def main(args):
     console = Console(record=True)
     console.print(f"[bold cyan]🚀 Python use - AIPython ({__version__}) [[green]https://aipy.app[/green]]")
+
     conf = ConfigManager(args.config_dir)
     conf.check_config()
     settings = conf.get_config()
@@ -36,6 +34,9 @@ def main(args):
     lang = settings.get('lang')
     if lang: set_lang(lang)
     
+    settings.gui = False
+    settings.debug = args.debug
+
     try:
         ai = TaskManager(settings, console=console)
     except Exception as e:
@@ -44,22 +45,22 @@ def main(args):
 
     update = ai.get_update(True)
     if update and update.get('has_update'):
-        console.print(f"[bold red]🔔 号外❗ {T("Update available")}: {update.get('latest_version')}")
+        console.print(f"[bold red]🔔 号外❗ {T('Update available')}: {update.get('latest_version')}")
 
-    if not ai.clients:
-        console.print(f"[bold red]{T("No available LLM, please check the configuration file")}")
+    if not ai.client_manager:
+        console.print(f"[bold red]{T('No available LLM, please check the configuration file')}")
         return
     
-    names = ai.clients.names
-    console.print(f"{T("Please use ai('task') to enter the task to be processed by AI (enter ai.use(llm) to switch to the following LLM:")}", style="green")
-    console.print(f"[cyan]{T("Default")}: [green]{names['default']}，[cyan]{T("Enabled")}: [yellow]{' '.join(names['enabled'])}")
+    names = ai.client_manager.names
+    console.print(f"{T('Please use ai(task) to enter the task to be processed by AI (enter ai.use(llm) to switch to the following LLM:')}", style="green")
+    console.print(f"[cyan]{T('Default')}: [green]{names['default']}，[cyan]{T('Enabled')}: [yellow]{' '.join(names['enabled'])}")
 
     interp = code.InteractiveConsole({'ai': ai})
 
     completer = PythonCompleter(ai)
     lexer = PygmentsLexer(PythonLexer)
     auto_suggest = AutoSuggestFromHistory()
-    history = FileHistory(str(Path.cwd() / settings.history))
+    history = FileHistory(str(CONFIG_DIR / '.history.py'))
     session = PromptSession(history=history, completer=completer, lexer=lexer, auto_suggest=auto_suggest)
     while True:
         try:
